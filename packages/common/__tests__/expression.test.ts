@@ -1,0 +1,924 @@
+import { mayBeJson, replacePlaceholders, resolveReadOnlyContent } from '../src/expression.js';
+import { SchemaPageArray } from '../src/index.js';
+
+describe('replacePlaceholders', () => {
+  it('should return content as is if there are no placeholders', () => {
+    const content = 'Hello, world!';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe(content);
+  });
+
+  it('should replace placeholders with variables', () => {
+    const content = 'Hello, {name}!';
+    const variables = { name: 'Alice' };
+    const result = replacePlaceholders({ content, variables, schemas: [] });
+    expect(result).toBe('Hello, Alice!');
+  });
+
+  it('should evaluate expressions within placeholders', () => {
+    const content = 'The sum is {1 + 2}.';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('The sum is 3.');
+  });
+
+  it('should handle date and dateTime placeholders', () => {
+    const content = 'Today is {date} and now is {dateTime}.';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    const date = new Date();
+    const padZero = (num: number) => String(num).padStart(2, '0');
+    const formattedDate = `${date.getFullYear()}/${padZero(date.getMonth() + 1)}/${padZero(
+      date.getDate(),
+    )}`;
+    const formattedDateTime = `${formattedDate} ${padZero(date.getHours())}:${padZero(
+      date.getMinutes(),
+    )}`;
+    expect(result).toBe(`Today is ${formattedDate} and now is ${formattedDateTime}.`);
+  });
+
+  it('should handle data from schemas', () => {
+    const content = 'Schema content: {name}';
+    const variables = {};
+    const schemas = [
+      [
+        {
+          name: 'name',
+          type: 'text',
+          content: 'SchemaName',
+          readOnly: true,
+        },
+      ],
+    ] as SchemaPageArray;
+    const result = replacePlaceholders({ content, variables, schemas });
+    expect(result).toBe('Schema content: SchemaName');
+  });
+
+  it('should prioritize variables over schemas', () => {
+    const content = 'Name: {name}';
+    const variables = { name: 'VariableName' };
+    const schemas = [
+      [
+        {
+          name: 'name',
+          type: 'text',
+          content: 'SchemaName',
+          readOnly: true,
+        },
+      ],
+    ] as SchemaPageArray;
+    const result = replacePlaceholders({ content, variables, schemas });
+    expect(result).toBe('Name: VariableName');
+  });
+
+  it('should handle nested placeholders in variables', () => {
+    const content = 'Nested variable: {greeting}';
+    const variables = { greeting: 'Hello, {name}!' };
+    const schemas = [
+      [
+        {
+          name: 'name',
+          type: 'text',
+          content: 'Bob',
+          readOnly: true,
+        },
+      ],
+    ] as SchemaPageArray;
+    const result = replacePlaceholders({ content, variables, schemas });
+    expect(result).toBe('Nested variable: Hello, Bob!');
+  });
+
+  it('should return content unchanged when placeholders are invalid', () => {
+    const content = 'Invalid placeholder: {name';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('Invalid placeholder: {name');
+  });
+
+  it('should evaluate expressions even if they result in Infinity', () => {
+    const content = 'Divide by zero: {1 / 0}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('Divide by zero: Infinity');
+  });
+
+  it('should handle complex expressions', () => {
+    const content = 'Result: {Math.max(1, 2, 3)}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('Result: 3');
+  });
+
+  it('should parse JSON strings in variables', () => {
+    const content = 'Data: {data.value}';
+    const variables = { data: '{"value": "42"}' };
+    const result = replacePlaceholders({ content, variables, schemas: [] });
+    expect(result).toBe('Data: 42');
+  });
+
+  it('should handle variables of different types', () => {
+    const content = 'Number: {num}, Boolean: {bool}, Array: {arr[0]}, Object: {obj.key}';
+    const variables = {
+      num: 42,
+      bool: true,
+      arr: ['first', 'second'],
+      obj: { key: 'value' },
+    };
+    const result = replacePlaceholders({ content, variables, schemas: [] });
+    expect(result).toBe('Number: 42, Boolean: true, Array: first, Object: value');
+  });
+
+  it('should use content from readOnly schemas', () => {
+    const content = 'Content: {readOnlyField}';
+    const variables = {};
+    const schemas = [
+      [
+        {
+          name: 'readOnlyField',
+          type: 'text',
+          content: 'ReadOnlyContent',
+          readOnly: true,
+        },
+      ],
+    ] as SchemaPageArray;
+    const result = replacePlaceholders({ content, variables, schemas });
+    expect(result).toBe('Content: ReadOnlyContent');
+  });
+
+  it('should use empty string for non-readOnly schema content', () => {
+    const content = 'Content: {editableField}';
+    const variables = {};
+    const schemas = [
+      [
+        {
+          name: 'editableField',
+          type: 'text',
+          content: 'Should not be used',
+          readOnly: false,
+        },
+      ],
+    ] as SchemaPageArray;
+    const result = replacePlaceholders({ content, variables, schemas });
+    expect(result).toBe('Content: ');
+  });
+
+  it('should allow method chaining on permitted global objects', () => {
+    const content = 'Chained: {Math.random().toString()}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Math.random() generates a random number, which is then converted to a string using toString()
+    const regex = /^Chained: \d+\.\d+$/;
+    expect(regex.test(result)).toBe(true);
+  });
+});
+
+describe('resolveReadOnlyContent', () => {
+  it('leaves multiVariableText content as variable JSON instead of evaluating it', () => {
+    const content = '{"lastName":"Smith","firstName":"John"}';
+    const result = resolveReadOnlyContent({
+      schema: {
+        name: 'fullName',
+        type: 'multiVariableText',
+        content,
+        position: { x: 0, y: 0 },
+        width: 80,
+        height: 10,
+        readOnly: true,
+      },
+      variables: {},
+      schemas: [],
+    });
+
+    expect(result).toBe(content);
+    expect(result).not.toBe('lastName');
+    expect(replacePlaceholders({ content, variables: {}, schemas: [] })).toBe('lastName');
+  });
+
+  it('still evaluates read-only text expressions', () => {
+    expect(
+      resolveReadOnlyContent({
+        schema: {
+          name: 'label',
+          type: 'text',
+          content: '{1+1}',
+          position: { x: 0, y: 0 },
+          width: 80,
+          height: 10,
+          readOnly: true,
+        },
+        variables: {},
+        schemas: [],
+      }),
+    ).toBe('2');
+  });
+
+  it('keeps table JSON going through replacePlaceholders', () => {
+    const content = '[["{1+1}"]]';
+    expect(
+      resolveReadOnlyContent({
+        schema: {
+          name: 'items',
+          type: 'table',
+          content,
+          position: { x: 0, y: 0 },
+          width: 80,
+          height: 10,
+          readOnly: true,
+        },
+        variables: {},
+        schemas: [],
+      }),
+    ).toBe(replacePlaceholders({ content, variables: {}, schemas: [] }));
+  });
+});
+
+describe('replacePlaceholders - unmatched braces (#1309)', () => {
+  const evaluate = (
+    content: string,
+    variables: Record<string, unknown> = {},
+    schemas: SchemaPageArray = [],
+  ) => replacePlaceholders({ content, variables, schemas });
+
+  it('keeps malformed placeholders as literal text instead of throwing', () => {
+    expect(evaluate('{{1}')).toBe('{{1}');
+    expect(evaluate('{{nested {1}')).toBe('{{nested {1}');
+    expect(evaluate('}}{{')).toBe('}}{{');
+  });
+
+  it('keeps input without a closing brace as literal text', () => {
+    expect(evaluate('{name')).toBe('{name');
+    expect(evaluate('{{')).toBe('{{');
+  });
+
+  it('evaluates valid placeholders before an unmatched opening brace and does not resume scanning', () => {
+    expect(evaluate('ok {1+1} bad {{1}')).toBe('ok 2 bad {{1}');
+    // The first `{` never finds a matching `}`, so the remainder is kept as-is.
+    // `{2+2}` after that unmatched opener is not evaluated.
+    expect(evaluate('{{1} tail {2+2}')).toBe('{{1} tail {2+2}');
+  });
+
+  it('keeps ordinary evaluation failures as the original placeholder', () => {
+    expect(evaluate('{notDefined.foo}')).toBe('{notDefined.foo}');
+    expect(evaluate('{1+}')).toBe('{1+}');
+  });
+
+  it('still evaluates valid expressions, variables, and object literals', () => {
+    expect(evaluate('{1+1}')).toBe('2');
+    expect(evaluate('Hello {name}', { name: 'Alice' })).toBe('Hello Alice');
+    expect(evaluate('{Object.keys({a:1})}')).toBe('a');
+  });
+
+  it('preserves existing results for extra braces, empty placeholders, and nested braces', () => {
+    expect(evaluate('{1+1}}')).toBe('2}');
+    expect(evaluate('{}')).toBe('{}');
+    expect(evaluate('{{1}}')).toBe('{{1}}');
+  });
+
+  it('does not throw when referenced or unreferenced variables contain malformed placeholders', () => {
+    expect(evaluate('{greeting}', { greeting: '{{1}' })).toBe('{{1}');
+    expect(evaluate('{1+1}', { unrelated: '{{1}' })).toBe('2');
+  });
+
+  it('does not throw when a readonly schema content value is malformed', () => {
+    const schemas = [
+      [
+        {
+          name: 'broken',
+          type: 'text',
+          content: '{{1}',
+          readOnly: true,
+        },
+        {
+          name: 'valid',
+          type: 'text',
+          content: '{1+1}',
+          readOnly: true,
+        },
+      ],
+    ] as SchemaPageArray;
+
+    expect(evaluate('broken:{broken} valid:{valid} sum:{1+1}', {}, schemas)).toBe(
+      'broken:{{1} valid:2 sum:2',
+    );
+  });
+
+  it('keeps cache hits for valid expressions and evaluation failures', () => {
+    expect(evaluate('{1+1}')).toBe('2');
+    expect(evaluate('{1+1}')).toBe('2');
+    expect(evaluate('{notDefined.foo}')).toBe('{notDefined.foo}');
+    expect(evaluate('{notDefined.foo}')).toBe('{notDefined.foo}');
+  });
+
+  it('can evaluate a valid expression after a malformed one', () => {
+    expect(evaluate('{{1}')).toBe('{{1}');
+    expect(evaluate('{1+1}')).toBe('2');
+    expect(evaluate('Hello {name}', { name: 'Alice' })).toBe('Hello Alice');
+  });
+});
+
+describe('replacePlaceholders - Security Tests', () => {
+  it('should prevent access to __proto__ property', () => {
+    const content = 'Proto: {__proto__}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Since __proto__ access is prohibited, the placeholder should remain unchanged
+    expect(result).toBe('Proto: {__proto__}');
+  });
+
+  it('should prevent access to constructor property', () => {
+    const content = 'Constructor: {constructor}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'constructor' is allowed if defined in context or globals; assuming it's not, placeholder remains
+    expect(result).toBe('Constructor: {constructor}');
+  });
+
+  it('should prevent access to prototype property', () => {
+    const content = 'Prototype: {prototype}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'prototype' access is prohibited
+    expect(result).toBe('Prototype: {prototype}');
+  });
+
+  it('should prevent access to nested prohibited properties', () => {
+    const content = 'Nested: {user.__proto__.polluted}';
+    const variables = { user: {} };
+    const result = replacePlaceholders({ content, variables, schemas: [] });
+    // Access to '__proto__' is prohibited; placeholder remains unchanged
+    expect(result).toBe('Nested: {user.__proto__.polluted}');
+  });
+
+  it('should prevent use of Function constructor', () => {
+    const content = 'Function: {Function("return 42")()}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Use of Function constructor is not allowed; placeholder remains unchanged
+    expect(result).toBe('Function: {Function("return 42")()}');
+  });
+
+  it('should prevent access to disallowed global variables', () => {
+    const content = 'Process: {process.env}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'process' is not in allowedGlobals; placeholder remains unchanged
+    expect(result).toBe('Process: {process.env}');
+  });
+
+  it('should prevent prototype pollution via JSON.parse', () => {
+    const content = 'Polluted: {JSON.parse(\'{"__proto__":{"polluted":true}}\').polluted}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Even if 'polluted' is accessed, the prototype is not polluted, so undefined is returned.
+    expect(result).toBe('Polluted: undefined');
+  });
+
+  it('should prevent accessing nested prohibited properties in functions', () => {
+    const content = 'Access: {( () => { return this.constructor } )()}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Attempting to access 'constructor' via 'this' should be prohibited; placeholder remains unchanged
+    expect(result).toBe('Access: {( () => { return this.constructor } )()}');
+  });
+
+  it('should prevent accessing global objects not in allowedGlobals', () => {
+    const content = 'Global: {global}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'global' is not in allowedGlobals; placeholder remains unchanged
+    expect(result).toBe('Global: {global}');
+  });
+
+  it('should prevent accessing Object constructor via allowed globals', () => {
+    const content = 'ObjectConstructor: {Object.constructor}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Accessing 'constructor' of 'Object' is prohibited
+    expect(result).toBe('ObjectConstructor: {Object.constructor}');
+  });
+
+  it('should prevent accessing Function from allowed globals', () => {
+    const content = 'FunctionAccess: {Function("return 42")()}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'Function' is not in allowedGlobals, so this should fail
+    expect(result).toBe('FunctionAccess: {Function("return 42")()}');
+  });
+
+  it('should prevent accessing nested properties via allowed globals', () => {
+    const content = 'NestedAccess: {Math.__proto__.polluted}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Accessing '__proto__' of allowed global 'Math' is prohibited
+    expect(result).toBe('NestedAccess: {Math.__proto__.polluted}');
+  });
+
+  it('should prevent execution of arbitrary code via ternary operator', () => {
+    const content = 'ArbitraryCode: {true ? (() => { return "Hacked" })() : "Safe"}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Execution of arbitrary functions is not allowed; placeholder remains unchanged
+    expect(result).toBe('ArbitraryCode: {true ? (() => { return "Hacked" })() : "Safe"}');
+  });
+
+  it('should handle attempts to override context variables', () => {
+    const content = 'Override: {date = "Hacked"} {date}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Assignment operations are not supported; placeholders remain unchanged
+    const date = new Date();
+    const padZero = (num: number) => String(num).padStart(2, '0');
+    const dateFmt = `${date.getFullYear()}/${padZero(date.getMonth() + 1)}/${padZero(
+      date.getDate(),
+    )}`;
+    expect(result).toBe(`Override: {date = "Hacked"} ${dateFmt}`);
+  });
+
+  it('should prevent using eval-like expressions', () => {
+    const content = 'Eval: {eval("2 + 2")';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'eval' is not in allowedGlobals; placeholder remains unchanged
+    expect(result).toBe('Eval: {eval("2 + 2")');
+  });
+
+  it('should prevent accessing undefined variables', () => {
+    const content = 'Undefined: {undefinedVar}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'undefinedVar' is not defined; placeholder remains unchanged
+    expect(result).toBe('Undefined: {undefinedVar}');
+  });
+
+  it('should prevent accessing nested properties of undefined variables', () => {
+    const content = 'NestedUndefined: {user.name}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // 'user' is undefined; accessing 'name' should fail and placeholder remains unchanged
+    expect(result).toBe('NestedUndefined: {user.name}');
+  });
+
+  it('should prevent accessing nested prohibited properties in objects', () => {
+    const content = 'Nested: {user.__proto__.polluted}';
+    const variables = { user: {} };
+    const result = replacePlaceholders({ content, variables, schemas: [] });
+    // Since access to '__proto__' is prohibited, the placeholder remains unchanged.
+    expect(result).toBe('Nested: {user.__proto__.polluted}');
+  });
+
+  it('should prevent using Function constructor', () => {
+    const content = 'Function: {Function("return 42")()}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Since 'Function' is not included in allowedGlobals, the placeholder remains unchanged.
+    expect(result).toBe('Function: {Function("return 42")()}');
+  });
+});
+
+describe('replacePlaceholders - Comparison Operators Tests', () => {
+  it('should evaluate expressions with == operator', () => {
+    const content = 'Equals: {1 == 1}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('Equals: true');
+  });
+
+  it('should evaluate expressions with != operator', () => {
+    const content = 'NotEquals: {1 != 2}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('NotEquals: true');
+  });
+
+  it('should evaluate expressions with === operator', () => {
+    const content = 'StrictEquals: {1 === 1}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('StrictEquals: true');
+  });
+
+  it('should evaluate expressions with !== operator', () => {
+    const content = 'StrictNotEquals: {1 !== "1"}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('StrictNotEquals: true');
+  });
+
+  it('should evaluate expressions with < operator', () => {
+    const content = 'LessThan: {1 < 2}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('LessThan: true');
+  });
+
+  it('should evaluate expressions with > operator', () => {
+    const content = 'GreaterThan: {2 > 1}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('GreaterThan: true');
+  });
+
+  it('should evaluate expressions with <= operator', () => {
+    const content = 'LessThanOrEquals: {1 <= 1}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('LessThanOrEquals: true');
+  });
+
+  it('should evaluate expressions with >= operator', () => {
+    const content = 'GreaterThanOrEquals: {2 >= 1}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('GreaterThanOrEquals: true');
+  });
+
+  it('should handle complex expressions with comparison operators', () => {
+    const content = 'Complex: {1 + 2 > 2 && 4 - 1 < 5}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe('Complex: true');
+  });
+
+  it('should prevent execution of arbitrary code via comparison operators', () => {
+    const content = 'ArbitraryCode: {1 < (() => { return "Hacked" })()}';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Execution of arbitrary functions is not allowed; placeholder remains unchanged
+    expect(result).toBe('ArbitraryCode: {1 < (() => { return "Hacked" })()}');
+  });
+});
+
+describe('replacePlaceholders - XSS Vulnerability Prevention Tests', () => {
+  it('should prevent XSS via Object.getOwnPropertyDescriptor and Object.getPrototypeOf (CVE payload 1)', () => {
+    const content =
+      '{ ((f, g) => f(g(Object), "constructor").value)(Object.getOwnPropertyDescriptor, Object.getPrototypeOf)("alert(location)")() }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // The dangerous expression should not be evaluated and should return as-is
+    expect(result).toBe(content);
+  });
+
+  it('should prevent XSS via object property assignment (CVE payload 2)', () => {
+    const content =
+      '{ { f: Object.getOwnPropertyDescriptor }.f({ g: Object.getPrototypeOf }.g(Object), "constructor").value("alert(location)")() }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // The dangerous expression should not be evaluated and should return as-is
+    expect(result).toBe(content);
+  });
+
+  it('should prevent direct access to Object.getOwnPropertyDescriptor', () => {
+    const content = '{ Object.getOwnPropertyDescriptor(Object, "constructor") }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent direct access to Object.getPrototypeOf', () => {
+    const content = '{ Object.getPrototypeOf(Object) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to Object.setPrototypeOf', () => {
+    const content = '{ Object.setPrototypeOf({}, null) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to Object.defineProperty', () => {
+    const content = '{ Object.defineProperty({}, "prop", { value: 42 }) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to Object.defineProperties', () => {
+    const content = '{ Object.defineProperties({}, { prop: { value: 42 } }) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to Object.getOwnPropertyNames', () => {
+    const content = '{ Object.getOwnPropertyNames(Object) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to Object.getOwnPropertySymbols', () => {
+    const content = '{ Object.getOwnPropertySymbols(Object) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Direct access to dangerous method should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should allow safe Object methods', () => {
+    // Test Object.keys
+    const keysContent = '{ Object.keys({ a: 1, b: 2 }) }';
+    const keysResult = replacePlaceholders({ content: keysContent, variables: {}, schemas: [] });
+    expect(keysResult).toBe('a,b');
+
+    // Test Object.values
+    const valuesContent = '{ Object.values({ a: 1, b: 2 }) }';
+    const valuesResult = replacePlaceholders({
+      content: valuesContent,
+      variables: {},
+      schemas: [],
+    });
+    expect(valuesResult).toBe('1,2');
+
+    // Test Object.entries
+    const entriesContent = '{ Object.entries({ a: 1 })[0] }';
+    const entriesResult = replacePlaceholders({
+      content: entriesContent,
+      variables: {},
+      schemas: [],
+    });
+    expect(entriesResult).toBe('a,1');
+
+    // Test safe Object.assign
+    const assignContent = '{ Object.assign({}, { a: 1 }, { b: 2 }).a }';
+    const assignResult = replacePlaceholders({
+      content: assignContent,
+      variables: {},
+      schemas: [],
+    });
+    expect(assignResult).toBe('1'); // Safe assign should work
+  });
+
+  it('should prevent complex XSS attempts via nested function calls', () => {
+    const content = '{ [].map.call("abc", Object.getOwnPropertyDescriptor) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Complex attempts to access dangerous functions should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent Function constructor access via constructor property', () => {
+    const content = '{ "".constructor.constructor("alert(1)")() }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Attempts to access Function constructor should be blocked
+    expect(result).toBe(content);
+  });
+
+  it('should prevent prototype pollution via Object.assign and __lookupGetter__', () => {
+    const content =
+      '{ { assign: Object.assign }.assign({ f: {}.__lookupGetter__("__proto__") }.f(), { polluted: "yes" }) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // The dangerous expression should not be evaluated due to __lookupGetter__ being blocked
+    expect(result).toBe(content);
+    // Verify that prototype is not polluted
+    expect(({} as any).polluted).toBeUndefined();
+  });
+
+  it('should prevent access to __lookupGetter__', () => {
+    const content = '{ {}.__lookupGetter__("__proto__") }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to __lookupSetter__', () => {
+    const content = '{ {}.__lookupSetter__("__proto__") }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to __defineGetter__', () => {
+    const content = '{ {}.__defineGetter__("test", () => "hacked") }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe(content);
+  });
+
+  it('should prevent access to __defineSetter__', () => {
+    const content = '{ {}.__defineSetter__("test", () => {}) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    expect(result).toBe(content);
+  });
+
+  it('should allow safe Object.assign but prevent prototype pollution', () => {
+    const content = '{ Object.assign({}, { a: 1 }) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Safe assign should work
+    expect(result).toBe('[object Object]');
+  });
+
+  it('should prevent prototype pollution via Object.assign', () => {
+    const pollutionContent = '{ Object.assign({}, { "__proto__": { polluted: "yes" } }) }';
+    const result = replacePlaceholders({ content: pollutionContent, variables: {}, schemas: [] });
+    // Should execute but not pollute prototype
+    expect(result).toBe('[object Object]');
+    expect(({} as any).polluted).toBeUndefined();
+
+    // Test with constructor
+    const constructorContent = '{ Object.assign({}, { "constructor": { polluted: "yes" } }) }';
+    const result2 = replacePlaceholders({
+      content: constructorContent,
+      variables: {},
+      schemas: [],
+    });
+    expect(result2).toBe('[object Object]');
+    expect(({} as any).constructor.polluted).toBeUndefined();
+  });
+
+  it('should no longer allow Object.create due to security concerns', () => {
+    const content = '{ Object.create(null) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Object.create is now blocked
+    expect(result).toBe(content);
+  });
+
+  it('should no longer allow Object.freeze due to security concerns', () => {
+    const content = '{ Object.freeze({}) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Object.freeze is now blocked
+    expect(result).toBe(content);
+  });
+
+  it('should no longer allow Object.seal due to security concerns', () => {
+    const content = '{ Object.seal({}) }';
+    const result = replacePlaceholders({ content, variables: {}, schemas: [] });
+    // Object.seal is now blocked
+    expect(result).toBe(content);
+  });
+});
+
+describe('replacePlaceholders memory safety', () => {
+  // Regression guard: before the fix, `parseData` memoized results in a
+  // module-level `parseDataCache` keyed by `JSON.stringify(data)` that was
+  // never evicted. Every unique inputs state added a permanent Map key
+  // whose byte length matched the input byte length, so any consumer
+  // passing varying large string values (image base64 in schema content,
+  // embedded fonts, large text) leaked memory for the app's lifetime.
+  //
+  // This test stress-tests the API with many unique large inputs and
+  // asserts that no multi-hundred-KB strings are retained afterwards. It
+  // uses `v8.writeHeapSnapshot` to capture ground truth from V8 instead
+  // of relying on `process.memoryUsage()` (which is too coarse and noisy
+  // to catch a cache that grows by tens of MB per burst).
+  //
+  // The test is deterministic in direction: pre-fix, retained "big
+  // string" bytes is O(inputs × inputSize) ≈ 15 MB, far above the
+  // threshold. Post-fix, retained is effectively zero (the strings are
+  // temporaries freed when the call returns).
+  it('does not retain call inputs in a module-level cache', () => {
+    const schemas: SchemaPageArray = [
+      [
+        {
+          name: 'blob',
+          type: 'text',
+          content: '',
+          position: { x: 0, y: 0 },
+          width: 100,
+          height: 10,
+        },
+      ],
+    ] as unknown as SchemaPageArray;
+
+    // 30 unique payloads × ~500 KB each. If the fix regresses, at least
+    // 15 MB of string data will be pinned as parseDataCache keys. The
+    // content MUST contain a placeholder (`{blob}`) — otherwise
+    // replacePlaceholders short-circuits and parseData is never called.
+    const PAYLOAD_COUNT = 30;
+    const PAYLOAD_SIZE = 500_000;
+    for (let i = 0; i < PAYLOAD_COUNT; i++) {
+      replacePlaceholders({
+        content: 'value: {blob}',
+        variables: { blob: `${i}-${'x'.repeat(PAYLOAD_SIZE)}` },
+        schemas,
+      });
+    }
+
+    // Force full GC if `--expose-gc` is available. If not, V8 will still
+    // have collected most transients by the time writeHeapSnapshot runs,
+    // and the threshold is generous enough that transient tails don't
+    // matter. On CI where --expose-gc is absent the test can still
+    // distinguish +15 MB (leak) from <1 MB (fixed).
+    const gc = (globalThis as { gc?: () => void }).gc;
+    if (gc) gc();
+
+    // v8.writeHeapSnapshot is available in all Node versions the pdfme
+    // monorepo supports. The snapshot JSON can be tens of MB; we parse it
+    // once and discard.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const v8: typeof import('v8') = require('v8');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs: typeof import('fs') = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const os: typeof import('os') = require('os');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path: typeof import('path') = require('path');
+
+    const snapPath = path.join(
+      os.tmpdir(),
+      `pdfme-expression-memtest-${process.pid}-${Date.now()}.heapsnapshot`,
+    );
+    v8.writeHeapSnapshot(snapPath);
+    const rawSnap = fs.readFileSync(snapPath, 'utf8');
+    fs.unlinkSync(snapPath);
+    const snap = JSON.parse(rawSnap) as {
+      nodes: number[];
+      snapshot: { meta: { node_fields: string[]; node_types: string[][] } };
+    };
+    const fieldCount = snap.snapshot.meta.node_fields.length;
+    const typeFieldIdx = snap.snapshot.meta.node_fields.indexOf('type');
+    const selfSizeIdx = snap.snapshot.meta.node_fields.indexOf('self_size');
+    const typeNames = snap.snapshot.meta.node_types[typeFieldIdx];
+
+    // Sum self_size of all 'string' nodes whose size exceeds 200 KB. A
+    // healthy post-fix run has ~0 such nodes (strings are freed after
+    // each call). A leaking pre-fix run has at least PAYLOAD_COUNT
+    // nodes totalling >= PAYLOAD_COUNT * PAYLOAD_SIZE bytes.
+    const MIN_STRING_BYTES = 200_000;
+    let retainedLargeStringBytes = 0;
+    for (let i = 0; i < snap.nodes.length; i += fieldCount) {
+      if (typeNames[snap.nodes[i + typeFieldIdx]] !== 'string') continue;
+      const size = snap.nodes[i + selfSizeIdx];
+      if (size >= MIN_STRING_BYTES) retainedLargeStringBytes += size;
+    }
+
+    // Generous threshold: healthy is ~0, leak is ~15 MB. 2 MB cleanly
+    // separates the two without being sensitive to unrelated large
+    // strings (e.g. inline source maps in test fixtures).
+    expect(retainedLargeStringBytes).toBeLessThan(2_000_000);
+  }, 60_000);
+});
+
+describe('mayBeJson', () => {
+  const jsonParseAccepts = (value: string): boolean => {
+    try {
+      JSON.parse(value);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Strings that start like JSON but are not: mayBeJson lets them through and JSON.parse rejects them.
+  const leftToJsonParse = new Set(['"', '[', '{"a"']);
+
+  it('is false exactly for the strings JSON.parse rejects, so skipping the parse changes nothing', () => {
+    const samples = [
+      '',
+      ' ',
+      '0',
+      '-0',
+      '00',
+      '0012',
+      '1',
+      '-1',
+      '1.5',
+      '1.',
+      '.5',
+      '5.620',
+      '25,60',
+      '0.35',
+      '1e5',
+      '1E-5',
+      '1e',
+      '-',
+      '+1',
+      ' 42 ',
+      '\n7\t',
+      ' 7',
+      '7 ',
+      'NaN',
+      'Infinity',
+      'true',
+      'false',
+      'null',
+      ' true ',
+      'True',
+      'nul',
+      'nullx',
+      'truthy',
+      'f',
+      '"quoted"',
+      '"',
+      '{"a":1}',
+      '{a:1}',
+      '[1,2]',
+      '[',
+      '{',
+      '{}',
+      ' { } ',
+      '{"a"',
+      '{x}',
+      '{ "a": [1] }',
+      ' [1] ',
+      '<svg/>',
+      'data:image/png;base64,AA',
+      '1.250,50 €',
+      '€ 4.146',
+      'Via Esempio 2',
+      '+41 00 000 00 01',
+      '01/10/2026',
+      '30%',
+      '8.10',
+      '0.00',
+      '-01',
+      '-.5',
+      '1.5e',
+      '1e+',
+      '0x10',
+      '1_000',
+      'fals',
+      'nullnull',
+      '\ttrue\n',
+      'false ',
+      ' null',
+    ];
+    for (const sample of samples) {
+      const expected = jsonParseAccepts(sample) || leftToJsonParse.has(sample);
+      expect(mayBeJson(sample), JSON.stringify(sample)).toBe(expected);
+    }
+  });
+
+  it('lets replacePlaceholders call JSON.parse only for values that can be JSON', () => {
+    const schemas = [
+      [
+        { name: 'title', type: 'text', content: '{name}: {items.length}', readOnly: true },
+        { name: 'note', type: 'text', content: 'Via Roma 1', readOnly: true },
+      ],
+    ] as unknown as SchemaPageArray;
+    const variables = { name: 'Acme', address: 'Via Roma 1', items: '["a","b"]', count: '2' };
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      expect(replacePlaceholders({ content: '{name}: {items.length}', variables, schemas })).toBe(
+        'Acme: 2',
+      );
+      // `items` and `count` are the only values that can be JSON; the placeholders, the address
+      // and the schema contents used to make JSON.parse throw, once each per field
+      expect(parse).toHaveBeenCalledTimes(2);
+    } finally {
+      parse.mockRestore();
+    }
+  });
+});

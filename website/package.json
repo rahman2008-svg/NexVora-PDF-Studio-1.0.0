@@ -1,0 +1,55 @@
+{
+  "name": "@pdfme/website",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "docusaurus": "docusaurus",
+    "start": "docusaurus start",
+    "start:ja": "docusaurus start --locale ja",
+    "build": "docusaurus build",
+    "swizzle": "docusaurus swizzle",
+    "deploy": "GIT_USER=hand-dot USE_SSH=true docusaurus deploy",
+    "clear": "docusaurus clear",
+    "serve": "docusaurus serve",
+    "write-translations": "docusaurus write-translations",
+    "write-heading-ids": "docusaurus write-heading-ids",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@docusaurus/core": "^3.10.2",
+    "@docusaurus/module-type-aliases": "^3.10.2",
+    "@docusaurus/plugin-client-redirects": "^3.10.2",
+    "@docusaurus/plugin-google-gtag": "^3.10.2",
+    "@docusaurus/preset-classic": "^3.10.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-github-btn": "^1.2.1"
+  },
+  "devDependencies": {
+    "@tsconfig/docusaurus": "^2.0.9",
+    "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "copy-webpack-plugin": "^14.0.0",
+    "css-minimizer-webpack-plugin": "^8.0.0",
+    "cssnano": "^7.0.0",
+    "cssnano-preset-advanced": "^7.0.0",
+    "serialize-javascript": "^7.0.5",
+    "sockjs": {
+      "uuid": "^11.1.1"
+    },
+    "tinypool": "^2.1.2"
+  },
+  "browserslist": {
+    "production": [
+      ">0.5%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

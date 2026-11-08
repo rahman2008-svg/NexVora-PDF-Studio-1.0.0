@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.build.base.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationDir": "./dist",
+    "emitDeclarationOnly": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "customConditions": ["node"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,34 @@
+*.log
+.DS_Store
+/node_modules
+/packages/*/node_modules
+/packages/common/src/version.ts
+.cache
+dist
+coverage/
+*.tsbuildinfo
+
+**/repomix-output.{txt,xml}
+
+**/__diff_output__/**
+**/__image_actual__/**
+**/__image_diffs__/**
+**/__image_diff_report__/**
+
+# Local agent output and memory files should stay out of public PRs.
+/tmp/claude-reviews/
+/memories/
+
+# Playground verification screenshots, logs, and Chrome profile.
+/tmp/verify-playground/
+
+# NexVora safety
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

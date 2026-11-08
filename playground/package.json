@@ -1,0 +1,66 @@
+{
+  "name": "playground",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm run generate-template-assets && vp dev",
+    "build": "npm run generate-template-assets && vp build && npm run copy-vercel-config",
+    "lint": "vp lint -c .oxlintrc.json src e2e vite.config.ts vitest.setup.ts",
+    "fmt": "vp fmt -c ../.oxfmtrc.json src e2e vite.config.ts vitest.setup.ts postcss.config.js tailwind.config.js --write",
+    "preview": "vp preview",
+    "deploy": "npm run build && gh-pages -d dist -b playground",
+    "copy-vercel-config": "node -e \"require('fs').copyFileSync('vercel.json', 'dist/vercel.json')\"",
+    "generate-template-assets": "node scripts/generate-authoring-starter-assets.mjs && node scripts/generate-templates-list-json.mjs && node scripts/generate-templates-thumbnail.mjs",
+    "test:exports": "node scripts/verify-package-exports.mjs",
+    "test": "npm run test:exports && vitest run --config ../vitest.config.ts",
+    "test:update-snapshots": "npm run test:exports && vitest run --config ../vitest.config.ts -u",
+    "test:local": "npm run test:exports && LOCAL=true vitest run --config ../vitest.config.ts"
+  },
+  "dependencies": {
+    "@headlessui/react": "^2.2.10",
+    "@monaco-editor/react": "^4.7.0",
+    "@pdfme/common": "file:../packages/common",
+    "@pdfme/converter": "file:../packages/converter",
+    "@pdfme/generator": "file:../packages/generator",
+    "@pdfme/jsx": "file:../packages/jsx",
+    "@pdfme/manipulator": "file:../packages/manipulator",
+    "@pdfme/pdf-lib": "file:../packages/pdf-lib",
+    "@pdfme/schemas": "file:../packages/schemas",
+    "@pdfme/ui": "file:../packages/ui",
+    "@sentry/react": "^11.10.0",
+    "bwip-js": "^4.11.4",
+    "lucide-react": "^0.475.0",
+    "monaco-editor": "^0.57.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.5",
+    "react-toastify": "^11.2.0",
+    "sucrase": "^3.35.1"
+  },
+  "devDependencies": {
+    "@puppeteer/replay": "^4.0.2",
+    "@sentry/vite-plugin": "^5.4.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.6.2",
+    "gh-pages": "^6.0.0",
+    "p-limit": "^7.3.3",
+    "postcss": "^8.5.32",
+    "puppeteer": "^25.16.0",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
+    "vite-plus": "1.4.0",
+    "vitest": "^5.0.5",
+    "vitest-image-snapshot": "^0.6.52"
+  },
+  "overrides": {
+    "dompurify": "^3.4.13",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
+    "vitest-image-snapshot": {
+      "vitest": "$vitest"
+    }
+  }
+}

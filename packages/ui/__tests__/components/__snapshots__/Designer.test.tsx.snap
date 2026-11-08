@@ -1,0 +1,634 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Designer snapshot 1`] = `
+<div
+  class="pdfme-designer-root"
+  style="position: relative; background: rgb(74, 74, 74); width: 1200px; height: 1200px;"
+>
+  <div
+    class="pdfme-designer-background"
+    style="margin: 0px auto; width: 1200px; height: 1200px;"
+  >
+    <div
+      class="pdfme-designer-left-sidebar"
+      style="left: 0px; right: 0px; position: absolute; z-index: 1; height: 0px; width: 45px; background: rgb(245, 245, 245); text-align: center; overflow: auto;"
+    >
+      <div
+        aria-describedby="5"
+        aria-disabled="false"
+        aria-roledescription="draggable"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          style="visibility: visible;"
+        >
+          <button
+            class="ant-btn ant-btn-default ant-btn-color-default ant-btn-variant-outlined pdfme-designer-plugin-text"
+            style="width: 35px; height: 35px; margin-top: 0.25rem; padding: 0.25rem;"
+            type="button"
+          >
+            <div
+              style="color: rgba(0, 0, 0, 0.88); display: flex; justify-content: center;"
+              title="text"
+            >
+              <svg
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6"
+                />
+                <path
+                  d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7"
+                />
+                <path
+                  d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"
+                />
+                <path
+                  d="M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1"
+                />
+                <path
+                  d="M9 6v12"
+                />
+              </svg>
+            </div>
+          </button>
+        </div>
+      </div>
+      <div
+        aria-describedby="5"
+        aria-disabled="false"
+        aria-roledescription="draggable"
+        role="button"
+        tabindex="0"
+      >
+        <div
+          style="visibility: visible;"
+        >
+          <button
+            class="ant-btn ant-btn-default ant-btn-color-default ant-btn-variant-outlined pdfme-designer-plugin-image"
+            style="width: 35px; height: 35px; margin-top: 0.25rem; padding: 0.25rem;"
+            type="button"
+          >
+            <div
+              style="color: rgba(0, 0, 0, 0.88); display: flex; justify-content: center;"
+              title="image"
+            >
+              <svg
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect
+                  height="18"
+                  rx="2"
+                  ry="2"
+                  width="18"
+                  x="3"
+                  y="3"
+                />
+                <circle
+                  cx="9"
+                  cy="9"
+                  r="2"
+                />
+                <path
+                  d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
+                />
+              </svg>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div
+      style="position: absolute; width: 1155px; margin-left: 45px;"
+    >
+      <div
+        style="position: absolute; top: auto; bottom: 6%; width: 755px; display: flex; justify-content: center; box-sizing: border-box; padding: 0px 8px; pointer-events: none;"
+      >
+        <div
+          class="pdfme-ui-control-bar"
+          style="display: inline-flex; align-items: center; justify-content: center; position: relative; z-index: 1; min-height: 40px; max-width: 100%; box-sizing: border-box; padding: 4px 12px; column-gap: 8px; row-gap: 4px; flex-wrap: wrap; border-radius: 6px; background-color: rgba(0, 0, 0, 0.45); pointer-events: auto;"
+        >
+          <div
+            class="pdfme-ui-zoom"
+            style="min-width: 0px;"
+          >
+            <div
+              style="display: flex; align-items: center; justify-content: center; flex-wrap: wrap; row-gap: 0px;"
+            >
+              <button
+                aria-label="Zoom out"
+                class="ant-btn ant-btn-text ant-btn-color-default ant-btn-variant-text pdfme-ui-zoom-out"
+                style="width: 32px; min-width: 32px; height: 32px; padding: 0px;"
+                title="Zoom out"
+                type="button"
+              >
+                Minus
+              </button>
+              <span
+                class="ant-typography"
+                style="color: rgb(255, 255, 255); font-size: 14px; margin: 8px; min-width: 44px; text-align: center; white-space: nowrap;"
+              >
+                <strong>
+                  100
+                  %
+                </strong>
+              </span>
+              <button
+                aria-label="Zoom in"
+                class="ant-btn ant-btn-text ant-btn-color-default ant-btn-variant-text pdfme-ui-zoom-in"
+                style="width: 32px; min-width: 32px; height: 32px; padding: 0px;"
+                title="Zoom in"
+                type="button"
+              >
+                Plus
+              </button>
+              <div
+                style="width: 1px; height: 24px; margin: 0px 6px; background-color: rgb(255, 255, 255); opacity: 0.45;"
+              />
+              <button
+                aria-label="Fit width"
+                class="ant-btn ant-btn-text ant-btn-color-default ant-btn-variant-text pdfme-ui-fit-width"
+                style="width: 32px; min-width: 32px; height: 32px; padding: 0px;"
+                title="Fit width"
+                type="button"
+              >
+                MoveHorizontal
+              </button>
+              <button
+                aria-label="Fit height"
+                class="ant-btn ant-btn-text ant-btn-color-default ant-btn-variant-text pdfme-ui-fit-height"
+                style="width: 32px; min-width: 32px; height: 32px; padding: 0px;"
+                title="Fit height"
+                type="button"
+              >
+                MoveVertical
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="pdfme-designer-right-sidebar"
+        style="position: absolute; right: 0px; z-index: 1; height: 100%; width: 400px;"
+      >
+        <button
+          class="ant-btn ant-btn-default ant-btn-color-default ant-btn-variant-outlined ant-btn-icon-only pdfme-designer-sidebar-toggle"
+          style="position: absolute; display: flex; align-items: center; justify-content: center; top: 14px; right: 16px; padding-top: 2px; z-index: 100;"
+          type="button"
+        >
+          <span
+            class="ant-btn-icon"
+          >
+            ArrowRight
+          </span>
+        </button>
+        <div
+          style="width: 400px; height: 100%; display: flex; top: 0px; right: 0px; position: absolute; font-family: "Open Sans", sans-serif; box-sizing: border-box; background: rgb(245, 245, 245); border-left: 1px solid rgba(5, 5, 5, 0.06);"
+        >
+          <div
+            class="pdfme-designer-list-view"
+            style="height: 100%; display: flex; flex: 1 1 0%; flex-direction: column;"
+          >
+            <div
+              style="position: relative; min-height: 60px; display: flex; flex-shrink: 0; flex-direction: column; justify-content: center; padding: 8px 16px 0px;"
+            >
+              <div
+                style="min-height: 40px; display: flex; align-items: center; justify-content: center;"
+              >
+                <span
+                  class="ant-typography"
+                  style="text-align: center; width: 100%;"
+                >
+                  <strong>
+                    Field List
+                  </strong>
+                </span>
+              </div>
+              <div
+                class="ant-divider ant-divider-horizontal"
+                role="separator"
+                style="margin-top: 8px; margin-bottom: 0px;"
+              />
+            </div>
+            <div
+              style="flex: 1 1 0%; min-height: 0px; overflow-y: auto; overflow-x: hidden; padding: 8px 16px;"
+            >
+              <ul
+                style="margin: 0px; padding: 0px; list-style: none; border-radius: 5px;"
+              >
+                <li
+                  style="margin-top: 10px; transform: translate(0px, 0px) scale(1, 1);"
+                >
+                  <div
+                    style="display: flex; align-items: center; cursor: pointer; gap: 0.5rem; border: 1px solid transparent;"
+                  >
+                    <button
+                      class="ant-btn ant-btn-default ant-btn-color-default ant-btn-variant-outlined ant-btn-icon-only"
+                      style="display: flex; align-items: center; background: none; box-shadow: none; border: medium; padding-left: 0.25rem;"
+                      type="button"
+                    >
+                      <span
+                        class="ant-btn-icon"
+                      >
+                        GripVertical
+                      </span>
+                    </button>
+                    <div
+                      style="color: rgba(0, 0, 0, 0.88); display: flex; justify-content: center;"
+                      title="text"
+                    >
+                      <svg
+                        fill="none"
+                        height="20"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="20"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6"
+                        />
+                        <path
+                          d="M13 8h7a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-7"
+                        />
+                        <path
+                          d="M5 16H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h1"
+                        />
+                        <path
+                          d="M6 4h1a2 2 0 0 1 2 2 2 2 0 0 1 2-2h1"
+                        />
+                        <path
+                          d="M9 6v12"
+                        />
+                      </svg>
+                    </div>
+                    <span
+                      class="ant-typography"
+                      style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: 100%;"
+                      title="Edit"
+                    >
+                      field1
+                    </span>
+                  </div>
+                </li>
+                <li
+                  style="margin-top: 10px; transform: translate(0px, 0px) scale(1, 1);"
+                >
+                  <div
+                    style="display: flex; align-items: center; cursor: pointer; gap: 0.5rem; border: 1px solid transparent;"
+                  >
+                    <button
+                      class="ant-btn ant-btn-default ant-btn-color-default ant-btn-variant-outlined ant-btn-icon-only"
+                      style="display: flex; align-items: center; background: none; box-shadow: none; border: medium; padding-left: 0.25rem;"
+                      type="button"
+                    >
+                      <span
+                        class="ant-btn-icon"
+                      >
+                        GripVertical
+                      </span>
+                    </button>
+                    <div
+                      style="color: rgba(0, 0, 0, 0.88); display: flex; justify-content: center;"
+                      title="image"
+                    >
+                      <svg
+                        fill="none"
+                        height="20"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="20"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <rect
+                          height="18"
+                          rx="2"
+                          ry="2"
+                          width="18"
+                          x="3"
+                          y="3"
+                        />
+                        <circle
+                          cx="9"
+                          cy="9"
+                          r="2"
+                        />
+                        <path
+                          d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
+                        />
+                      </svg>
+                    </div>
+                    <span
+                      class="ant-typography"
+                      style="overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: 100%;"
+                      title="Edit"
+                    >
+                      field2
+                    </span>
+                  </div>
+                </li>
+              </ul>
+              <div
+                id="1"
+                style="display: none;"
+              >
+                
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+              </div>
+              <div
+                aria-atomic="true"
+                aria-live="assertive"
+                id="2"
+                role="status"
+                style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip: rect(0px); clip-path: inset(100%); white-space: nowrap;"
+              />
+            </div>
+            <div
+              style="display: flex; flex-shrink: 0; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px;"
+            >
+              <button
+                class="ant-btn ant-btn-text ant-btn-color-default ant-btn-variant-text ant-btn-sm pdfme-designer-bulk-update"
+                type="button"
+              >
+                <u>
+                  Bulk update field names
+                </u>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div
+        class="pdfme-designer-canvas"
+        style="position: relative; overflow: auto; margin-right: 400px; width: 755px; height: 1200px;"
+      >
+        <div
+          class="selecto-selection rCS179bs95 pdfme-selecto"
+          style="background-color: rgb(22, 119, 255); opacity: 0.75; border-color: rgb(145, 202, 255);"
+        />
+        <div
+          style="transform: scale(1); transform-origin: top left; height: 1px; width: 1px;"
+        >
+          <div
+            style="font-family: "Roboto"; top: 30px; left: 30px; position: relative; background-image: url("data:image/png;base64,a..."); background-size: 793.700787411px 1122.5196850527px; width: 793.700787411px; height: 1122.5196850527px;"
+          >
+            <div
+              class="ruler-container"
+              style="position: absolute; top: -30px; left: -30px; height: 30px; width: 30px; background: rgb(51, 51, 51);"
+            />
+            <div
+              class="scena-guides-manager scena-guides-horizontal rCS1c864qp"
+              data-styled-id="rCS1c864qp"
+              style="position: absolute; top: -30px; left: 0px; height: 30px; width: 793.700787411px; background: rgb(51, 51, 51);"
+            >
+              <div
+                class="scena-guides-guide-origin"
+              />
+              <canvas
+                height="0"
+                style="width: 100%; height: 100%;"
+                width="0"
+              />
+              <div
+                class="scena-guides-guides"
+                style="transform: translateY(0px);"
+              >
+                <div
+                  class="scena-guides-guide scena-guides-adder"
+                />
+              </div>
+            </div>
+            <div
+              class="scena-guides-manager scena-guides-vertical rCS1c864qp"
+              data-styled-id="rCS1c864qp"
+              style="position: absolute; top: 0px; left: -30px; height: 1122.5196850527px; width: 30px; background: rgb(51, 51, 51);"
+            >
+              <div
+                class="scena-guides-guide-origin"
+              />
+              <canvas
+                height="0"
+                style="width: 100%; height: 100%;"
+                width="0"
+              />
+              <div
+                class="scena-guides-guides"
+                style="transform: translateX(0px);"
+              >
+                <div
+                  class="scena-guides-guide scena-guides-adder"
+                />
+              </div>
+            </div>
+            <div
+              class="moveable-control-box pdfme-moveable-1 rCS1bhdyl6"
+              data-able-clickable="true"
+              data-able-draggable="true"
+              data-able-origin="true"
+              data-able-padding="true"
+              data-able-resizable="true"
+              data-able-rotatable="true"
+              data-able-snappable="true"
+              data-styled-id="rCS1bhdyl6"
+              style="position: absolute; display: none; visibility: visible; transform: translate3d(0px, 0px, 0); --zoom: 1; --zoompx: 1px; --moveable-color: #1677ff;"
+            >
+              <div
+                class="moveable-control moveable-direction moveable-n moveable-resizable"
+                data-direction="n"
+                data-rotation="0"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-w moveable-resizable"
+                data-direction="w"
+                data-rotation="90"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-s moveable-resizable"
+                data-direction="s"
+                data-rotation="0"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-e moveable-resizable"
+                data-direction="e"
+                data-rotation="90"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-nw moveable-resizable"
+                data-direction="nw"
+                data-rotation="135"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-ne moveable-resizable"
+                data-direction="ne"
+                data-rotation="45"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-sw moveable-resizable"
+                data-direction="sw"
+                data-rotation="45"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-control moveable-direction moveable-se moveable-resizable"
+                data-direction="se"
+                data-rotation="135"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-rotation"
+                style="transform: translate(-50%) translate(0px, 0px) rotate(0rad);"
+              >
+                <div
+                  class="moveable-line moveable-rotation-line"
+                  style="transform: scaleX(1); --moveable-color: #1677ff;"
+                />
+                <div
+                  class="moveable-control moveable-rotation-control"
+                  style="transform: translate(0.5px) scale(1);"
+                />
+              </div>
+              <div
+                class="moveable-control moveable-origin"
+                style="transform: translateZ(0px) translate(0px, 0px) rotate(0rad) scale(1);"
+              />
+              <div
+                class="moveable-line moveable-direction"
+                data-direction=""
+                data-line-key="render-line-0"
+                data-rotation="-1"
+                style="transform: translateY(-50%) translate(-0.5px, 0px) rotate(0rad) scaleY(1); width: 1px; --moveable-color: #1677ff;"
+              />
+              <div
+                class="moveable-line moveable-direction"
+                data-direction=""
+                data-line-key="render-line-1"
+                data-rotation="-1"
+                style="transform: translateY(-50%) translate(0px, -0.5px) rotate(1.5707963267948966rad) scaleY(1); width: 1px; --moveable-color: #1677ff;"
+              />
+              <div
+                class="moveable-line moveable-direction"
+                data-direction=""
+                data-line-key="render-line-2"
+                data-rotation="-1"
+                style="transform: translateY(-50%) translate(0.5px, 0px) rotate(3.141592653589793rad) scaleY(1); width: 1px; --moveable-color: #1677ff;"
+              />
+              <div
+                class="moveable-line moveable-direction"
+                data-direction=""
+                data-line-key="render-line-3"
+                data-rotation="-1"
+                style="transform: translateY(-50%) translate(0px, 0.5px) rotate(4.71238898038469rad) scaleY(1); width: 1px; --moveable-color: #1677ff;"
+              />
+            </div>
+            <div>
+              <div
+                class="selectable"
+                id="3"
+                style="position: absolute; cursor: pointer; height: 56.692913386499995px; width: 377.95275591px; top: 75.590551182px; left: 75.590551182px; transform: rotate(0deg); opacity: 1; outline: 1px dashed #1677ff;"
+                title="field1"
+              >
+                <div
+                  style="height: 100%; width: 100%;"
+                >
+                  <div
+                    style="padding: 0px; resize: none; background-color: transparent; border: medium; display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; cursor: default;"
+                  >
+                    <div
+                      id="text-3"
+                      style="font-family: inherit; color: rgb(0, 0, 0); font-size: 30pt; letter-spacing: 0pt; line-height: 1em; text-align: left; white-space: pre; word-break: normal; resize: none; border: medium; outline: none; margin-bottom: 0px; padding-top: 3.436640625px; background-color: transparent; height: 100%;"
+                    >
+                      <span
+                        data-pdfme-wrap-line=""
+                        style="white-space: pre;"
+                      >
+                        <span>
+                          b
+                        </span>
+                        <span
+                          style="letter-spacing: 0px;"
+                        >
+                          b
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div
+                class="selectable"
+                id="4"
+                style="position: absolute; cursor: pointer; height: 151.181102364px; width: 377.95275591px; top: 132.2834645685px; left: 75.590551182px; transform: rotate(0deg); opacity: 1; outline: 1px dashed #1677ff;"
+                title="field2"
+              >
+                <div
+                  style="height: 100%; width: 100%;"
+                >
+                  <div
+                    style="width: 100%; height: 100%; background-image: none; background-size: contain; background-repeat: no-repeat; background-position: center center;"
+                  >
+                    <img
+                      src="aaaaaaaaaaaa"
+                      style="height: 100%; width: 100%; border-radius: 0px; object-fit: contain;"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      id="5"
+      style="display: none;"
+    >
+      
+    To pick up a draggable item, press the space bar.
+    While dragging, use the arrow keys to move the item.
+    Press space again to drop the item in its new position, or press escape to cancel.
+  
+    </div>
+    <div
+      aria-atomic="true"
+      aria-live="assertive"
+      id="6"
+      role="status"
+      style="position: fixed; top: 0px; left: 0px; width: 1px; height: 1px; margin: -1px; border: 0px; padding: 0px; overflow: hidden; clip: rect(0px); clip-path: inset(100%); white-space: nowrap;"
+    />
+  </div>
+</div>
+`;

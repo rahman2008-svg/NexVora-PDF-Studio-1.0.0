@@ -1,0 +1,325 @@
+import { getFallbackFontName, mm2pt, pt2mm, type Font } from '@pdfme/common';
+import type { Font as FontKitFont } from 'fontkit';
+import {
+  DEFAULT_CHARACTER_SPACING,
+  DEFAULT_DYNAMIC_FIT,
+  DEFAULT_FONT_SIZE,
+  DEFAULT_LINE_HEIGHT,
+  DEFAULT_FONT_VARIANT_FALLBACK,
+  CODE_HORIZONTAL_PADDING,
+  DYNAMIC_FIT_HORIZONTAL,
+  DYNAMIC_FIT_VERTICAL,
+  FONT_VARIANT_FALLBACK_ERROR,
+  FONT_VARIANT_FALLBACK_PLAIN,
+  SYNTHETIC_BOLD_OFFSET_RATIO,
+  SYNTHETIC_BOLD_PDF_EXTRA_DRAWS,
+  SYNTHETIC_ITALIC_SKEW_DEGREES,
+  TEXT_FORMAT_INLINE_MARKDOWN,
+} from './constants.js';
+import {
+  fitDynamicFontSize,
+  getFontKitFont,
+  getLineBoxHeightPt,
+  heightOfFontAtSize,
+  widthOfTextAtSize,
+} from './helper.js';
+import { parseInlineMarkdown } from './inlineMarkdown.js';
+import type { RichTextRun, TextSchema } from './types.js';
+import { getBoxContentArea } from '../box.js';
+import { countGraphemes, layoutStyledRuns } from './wrap.js';
+
+export type ResolvedRichTextRun = RichTextRun & {
+  fontName: string;
+  fontKitFont: FontKitFont;
+  syntheticBold: boolean;
+  syntheticItalic: boolean;
+};
+
+export type RichTextLineRun = ResolvedRichTextRun & {
+  width: number;
+};
+
+export type RichTextLine = {
+  runs: RichTextLineRun[];
+  width: number;
+  hardBreak: boolean;
+};
+
+type FontVariantResolution = {
+  fontName: string;
+  syntheticBold: boolean;
+  syntheticItalic: boolean;
+};
+
+const getBaseFontName = (schema: TextSchema, font: Font) =>
+  schema.fontName && font[schema.fontName] ? schema.fontName : getFallbackFontName(font);
+
+const getLoadedFontName = (font: Font, fontName?: string) =>
+  fontName && font[fontName] ? fontName : undefined;
+
+export const isInlineMarkdownTextSchema = (schema: TextSchema) =>
+  schema.textFormat === TEXT_FORMAT_INLINE_MARKDOWN &&
+  !(schema.type === 'text' && schema.readOnly !== true);
+
+export const resolveFontVariant = (
+  run: RichTextRun,
+  schema: TextSchema,
+  font: Font,
+): FontVariantResolution => {
+  const baseFontName = getBaseFontName(schema, font);
+  const variants = schema.fontVariants ?? {};
+  const fallback = schema.fontVariantFallback ?? DEFAULT_FONT_VARIANT_FALLBACK;
+
+  let fontName = baseFontName;
+  let needsBold = Boolean(run.bold);
+  let needsItalic = Boolean(run.italic);
+
+  if (run.code) {
+    fontName = getLoadedFontName(font, variants.code) ?? baseFontName;
+  } else if (run.bold && run.italic) {
+    const boldItalic = getLoadedFontName(font, variants.boldItalic);
+    const italic = getLoadedFontName(font, variants.italic);
+    const bold = getLoadedFontName(font, variants.bold);
+
+    if (boldItalic) {
+      fontName = boldItalic;
+      needsBold = false;
+      needsItalic = false;
+    } else if (italic) {
+      fontName = italic;
+      needsItalic = false;
+    } else if (bold) {
+      fontName = bold;
+      needsBold = false;
+    }
+  } else if (run.bold) {
+    const bold = getLoadedFontName(font, variants.bold);
+    if (bold) {
+      fontName = bold;
+      needsBold = false;
+    }
+  } else if (run.italic) {
+    const italic = getLoadedFontName(font, variants.italic);
+    if (italic) {
+      fontName = italic;
+      needsItalic = false;
+    }
+  }
+
+  if (
+    (needsBold || needsItalic || (run.code && !getLoadedFontName(font, variants.code))) &&
+    fallback === FONT_VARIANT_FALLBACK_ERROR
+  ) {
+    throw new Error(
+      `[@pdfme/schemas] Missing font variant for markdown text in field "${schema.name}".`,
+    );
+  }
+
+  return {
+    fontName,
+    syntheticBold: fallback !== FONT_VARIANT_FALLBACK_PLAIN && needsBold,
+    syntheticItalic: fallback !== FONT_VARIANT_FALLBACK_PLAIN && needsItalic,
+  };
+};
+
+export const resolveRichTextRuns = async (arg: {
+  runs: RichTextRun[];
+  schema: TextSchema;
+  font: Font;
+  _cache: Map<string | number, unknown>;
+}): Promise<ResolvedRichTextRun[]> => {
+  const { runs, schema, font, _cache } = arg;
+  const fontKitCache = new Map<string, FontKitFont>();
+
+  const getResolvedFontKitFont = async (fontName: string) => {
+    const cached = fontKitCache.get(fontName);
+    if (cached) return cached;
+
+    const fontKitFont = await getFontKitFont(fontName, font, _cache as Map<string, FontKitFont>);
+    fontKitCache.set(fontName, fontKitFont);
+    return fontKitFont;
+  };
+
+  return Promise.all(
+    runs.map(async (run) => {
+      const resolution = resolveFontVariant(run, schema, font);
+      return {
+        ...run,
+        ...resolution,
+        fontKitFont: await getResolvedFontKitFont(resolution.fontName),
+      };
+    }),
+  );
+};
+
+export const measureRunText = (
+  run: ResolvedRichTextRun,
+  text: string,
+  fontSize: number,
+  characterSpacing: number,
+) => {
+  const syntheticBoldWidth = run.syntheticBold
+    ? fontSize * SYNTHETIC_BOLD_OFFSET_RATIO * SYNTHETIC_BOLD_PDF_EXTRA_DRAWS
+    : 0;
+  const syntheticItalicWidth = run.syntheticItalic
+    ? heightOfFontAtSize(run.fontKitFont, fontSize) *
+      Math.tan((SYNTHETIC_ITALIC_SKEW_DEGREES * Math.PI) / 180)
+    : 0;
+  return (
+    widthOfTextAtSize(text, run.fontKitFont, fontSize, characterSpacing) +
+    syntheticBoldWidth +
+    syntheticItalicWidth +
+    (run.code ? CODE_HORIZONTAL_PADDING * 2 : 0)
+  );
+};
+
+export const countRichTextLineGraphemes = (line: RichTextLine) =>
+  countGraphemes(line.runs.map((run) => run.text).join(''));
+
+export const getRichTextLineText = (line: RichTextLine) =>
+  line.runs.map((run) => run.text).join('');
+
+export const layoutRichTextLines = (arg: {
+  runs: ResolvedRichTextRun[];
+  fontSize: number;
+  characterSpacing: number;
+  boxWidthInPt: number;
+}): RichTextLine[] => {
+  const { runs, fontSize, characterSpacing, boxWidthInPt } = arg;
+  return layoutStyledRuns(
+    runs.map((run) => ({
+      text: run.text,
+      measure: (text) => measureRunText(run, text, fontSize, characterSpacing),
+      style: run,
+    })),
+    boxWidthInPt,
+    { characterSpacing },
+  ).map((line) => ({
+    runs: line.spans.map((span) => ({
+      ...span.style,
+      text: span.text,
+      width: span.width,
+    })),
+    width: line.width,
+    hardBreak: line.hardBreak,
+  }));
+};
+
+const measureParagraphWidths = (
+  runs: ResolvedRichTextRun[],
+  fontSize: number,
+  characterSpacing: number,
+) => {
+  const widths: number[] = [];
+  let paragraphText = '';
+  let paragraphRuns: ResolvedRichTextRun[] = [];
+
+  const pushWidth = () => {
+    if (paragraphRuns.length === 0 && paragraphText === '') {
+      widths.push(0);
+      return;
+    }
+    let width = 0;
+    paragraphRuns.forEach((run, index) => {
+      if (index > 0) width += characterSpacing;
+      width += measureRunText(run, run.text, fontSize, characterSpacing);
+    });
+    widths.push(width);
+    paragraphText = '';
+    paragraphRuns = [];
+  };
+
+  runs.forEach((run) => {
+    run.text.split(/(\r\n|\r|\n|\f|\v)/).forEach((part) => {
+      if (part === '\r\n' || part === '\r' || part === '\n' || part === '\f' || part === '\v') {
+        pushWidth();
+        return;
+      }
+
+      if (part) {
+        paragraphText += part;
+        paragraphRuns.push({ ...run, text: part });
+      }
+    });
+  });
+
+  pushWidth();
+  return widths;
+};
+
+export const getRichTextLineBoxHeightPt = (
+  line: RichTextLine,
+  fontSize: number,
+  isFirstLine: boolean,
+  fallbackFont: FontKitFont,
+) =>
+  getLineBoxHeightPt(
+    fontSize,
+    isFirstLine,
+    line.runs.map((run) => run.fontKitFont),
+    fallbackFont,
+  );
+
+export const calculateDynamicRichTextFontSize = async (arg: {
+  value: string;
+  schema: TextSchema;
+  font: Font;
+  _cache: Map<string | number, unknown>;
+  startingFontSize?: number | undefined;
+}) => {
+  const { value, schema, font, _cache, startingFontSize } = arg;
+  const {
+    fontSize: schemaFontSize,
+    dynamicFontSize: dynamicFontSizeSetting,
+    characterSpacing: schemaCharacterSpacing,
+    lineHeight = DEFAULT_LINE_HEIGHT,
+  } = schema;
+  const { width: boxWidth, height: boxHeight } = getBoxContentArea(schema);
+  const fontSize = startingFontSize || schemaFontSize || DEFAULT_FONT_SIZE;
+  if (!dynamicFontSizeSetting) return fontSize;
+
+  const richTextRuns = parseInlineMarkdown(value);
+  const resolvedRuns = await resolveRichTextRuns({ runs: richTextRuns, schema, font, _cache });
+  const fallbackFont =
+    resolvedRuns[0]?.fontKitFont ??
+    (await getFontKitFont(schema.fontName, font, _cache as Map<string, FontKitFont>));
+  const characterSpacing = schemaCharacterSpacing ?? DEFAULT_CHARACTER_SPACING;
+  const dynamicFontFit = dynamicFontSizeSetting.fit ?? DEFAULT_DYNAMIC_FIT;
+  const boxWidthInPt = mm2pt(boxWidth);
+
+  return fitDynamicFontSize({
+    startSize: fontSize,
+    setting: dynamicFontSizeSetting,
+    boxWidth,
+    boxHeight,
+    calculateConstraints: (size) => {
+      let totalWidthInMm = 0;
+      let totalHeightInMm = 0;
+
+      const lines = layoutRichTextLines({
+        runs: resolvedRuns,
+        fontSize: size,
+        characterSpacing,
+        boxWidthInPt,
+      });
+
+      lines.forEach((line, lineIndex) => {
+        if (dynamicFontFit === DYNAMIC_FIT_VERTICAL) {
+          totalWidthInMm = Math.max(totalWidthInMm, pt2mm(line.width));
+        }
+
+        totalHeightInMm += pt2mm(
+          getRichTextLineBoxHeightPt(line, size, lineIndex === 0, fallbackFont) * lineHeight,
+        );
+      });
+
+      if (dynamicFontFit === DYNAMIC_FIT_HORIZONTAL) {
+        measureParagraphWidths(resolvedRuns, size, characterSpacing).forEach((paragraphWidth) => {
+          totalWidthInMm = Math.max(totalWidthInMm, pt2mm(paragraphWidth));
+        });
+      }
+
+      return { totalWidthInMm, totalHeightInMm };
+    },
+  });
+};

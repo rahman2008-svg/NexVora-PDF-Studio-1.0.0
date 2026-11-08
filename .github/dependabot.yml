@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/packages/*"
+      - "/playground"
+      - "/website"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 20
+    labels:
+      - "dependencies"
+      - "npm"
+    ignore:
+      # Bundled into @pdfme/ui against antd 6 outside its antd 4/5 peer range
+      # (#1690). Bump major/minor manually after checking the Designer
+      # property panel; patch updates still come through.
+      - dependency-name: "form-render"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

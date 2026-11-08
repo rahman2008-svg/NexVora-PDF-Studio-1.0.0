@@ -1,0 +1,828 @@
+import hotkeysJs from 'hotkeys-js';
+import { useContext } from 'react';
+import {
+  cloneDeep,
+  ZOOM,
+  getB64BasePdf,
+  b64toUint8Array,
+  Template,
+  BasePdf,
+  SchemaForUI,
+  Size,
+  isBlankPdf,
+  Plugin,
+  PluginRegistry,
+} from '@pdfme/common';
+import { pdf2size } from '@pdfme/converter';
+import {
+  DEFAULT_MAX_ZOOM,
+  PAGE_GAP,
+  PAGE_SWITCH_REMAINING_RATIO,
+  RULER_HEIGHT,
+} from './constants.js';
+import { OptionsContext } from './contexts.js';
+
+// Define a type for the hotkeys function with additional properties
+type HotkeysFunction = {
+  (keys: string, callback: (e: KeyboardEvent, handler: { shortcut: string }) => void): unknown;
+  unbind: (keys: string) => void;
+};
+
+// Create a simple mock for hotkeys to avoid TypeScript errors
+const hotkeys = function (
+  keys: string,
+  callback: (e: KeyboardEvent, handler: { shortcut: string }) => void,
+) {
+  return hotkeysJs(keys, callback);
+} as HotkeysFunction;
+
+hotkeys.unbind = function (keys: string) {
+  // Do nothing if hotkeysJs doesn't have unbind
+  const hotkeysFn = hotkeysJs as unknown as { unbind?: (keys: string) => void };
+  if (typeof hotkeysFn.unbind === 'function') {
+    hotkeysFn.unbind(keys);
+  }
+};
+
+export const uuid = () =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c == 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+
+/**
+ * Assigns runtime UI ids that stay stable for a Designer/Viewer/Form session.
+ * Caller/template ids are ignored: Schema.passthrough() can carry values that
+ * break `#text-{id}` querySelector (e.g. `foo[`). Save paths still strip ids.
+ */
+export const stabilizeSchemaIds = <T extends { name: string; id?: string }>(
+  schemas: T[],
+  idMap: Map<string, string>,
+): (T & { id: string })[] =>
+  schemas.map((schema, index) => {
+    const key = schema.name || `index:${index}`;
+    const existingId = idMap.get(key);
+    if (existingId) {
+      return { ...schema, id: existingId };
+    }
+    const id = uuid();
+    idMap.set(key, id);
+    return { ...schema, id };
+  });
+
+const set = <T extends object>(obj: T, path: string | string[], value: unknown) => {
+  path = Array.isArray(path) ? path : path.replace(/\[/g, '.').replace(/\]/g, '').split('.');
+  let src: Record<string, unknown> = obj as Record<string, unknown>;
+  path.forEach((key, index, array) => {
+    if (index == path.length - 1) {
+      src[key] = value;
+    } else {
+      if (!Object.prototype.hasOwnProperty.call(src, key)) {
+        const next = array[index + 1];
+        src[key] = String(Number(next)) === next ? [] : {};
+      }
+      src = src[key] as Record<string, unknown>;
+    }
+  });
+};
+
+export const debounce = <T extends (...args: unknown[]) => unknown>(cb: T, wait = 20) => {
+  let h: null | ReturnType<typeof setTimeout> = null;
+  const callable = (...args: Parameters<T>) => {
+    if (h) clearTimeout(h);
+    h = setTimeout(() => cb(...args), wait);
+  };
+  return callable as T;
+};
+
+const shift = (number: number, precision: number, reverseShift: boolean) => {
+  if (reverseShift) {
+    precision = -precision;
+  }
+  const numArray = `${number}`.split('e');
+
+  return Number(`${numArray[0]}e${numArray[1] ? Number(numArray[1]) + precision : precision}`);
+};
+
+export const round = (number: number, precision: number) => {
+  return shift(Math.round(shift(number, precision, false)), precision, true);
+};
+
+export const flatten = <T>(arr: T[][]): T[] => ([] as T[]).concat(...arr);
+
+/**
+ * Single source of truth for whether a schema type supports rotation in the
+ * Designer (rotate handle on the canvas and rotate input in the detail view).
+ * A plugin opts out by omitting `rotate` from its propPanel.defaultSchema or
+ * setting it to `undefined` (e.g. `{ ...text.propPanel.defaultSchema, rotate: undefined }`).
+ */
+export const isRotatableSchema = (defaultSchema?: Record<string, unknown>): boolean =>
+  typeof defaultSchema?.rotate !== 'undefined';
+
+/** Plugins with an intrinsic aspect ratio keep their box ratio on canvas resize without Shift. */
+export const isAspectRatioLockedPlugin = (plugin?: Plugin): boolean =>
+  typeof plugin?.getAspectRatio === 'function';
+
+const up = 'up';
+const shiftUp = 'shift+up';
+const down = 'down';
+const shiftDown = 'shift+down';
+const left = 'left';
+const shiftLeft = 'shift+left';
+const right = 'right';
+const shiftRight = 'shift+right';
+
+const rmWin = 'backspace';
+const rmMac = 'delete';
+const esc = 'esc';
+const copyWin = 'ctrl+c';
+const copyMac = 'command+c';
+const pasteWin = 'ctrl+v';
+const pasteMac = 'command+v';
+// Letter shortcuts need hotkeys-js ≥4.0.4 (we declare ^4.0.7). 4.0.0–4.0.3
+// matched via physical event.code, so QWERTZ layouts swapped undo/redo (#1465).
+const redoWin = 'ctrl+y';
+const redoMac = 'shift+command+z';
+const undoWin = 'ctrl+z';
+const undoMac = 'command+z';
+const saveWin = 'ctrl+s';
+const saveMac = 'command+s';
+const selectAllWin = 'ctrl+a';
+const selectAllMac = 'command+a';
+
+const keys = [
+  up,
+  shiftUp,
+  down,
+  shiftDown,
+  left,
+  shiftLeft,
+  right,
+  shiftRight,
+  rmMac,
+  rmWin,
+  esc,
+  copyWin,
+  copyMac,
+  pasteWin,
+  pasteMac,
+  redoWin,
+  redoMac,
+  undoWin,
+  undoMac,
+  saveWin,
+  saveMac,
+  selectAllWin,
+  selectAllMac,
+];
+
+export const initShortCuts = (arg: {
+  move: (command: 'up' | 'down' | 'left' | 'right', isShift: boolean) => void;
+  remove: () => void;
+  esc: () => void;
+  copy: () => void;
+  paste: () => void;
+  redo: () => void;
+  undo: () => void;
+  save: () => void;
+  selectAll: () => void;
+}) => {
+  hotkeys(keys.join(), (e: KeyboardEvent, handler: { shortcut: string }) => {
+    switch (handler.shortcut) {
+      case up:
+      case shiftUp:
+        e.preventDefault();
+        arg.move('up', e.shiftKey);
+        break;
+      case down:
+      case shiftDown:
+        e.preventDefault();
+        arg.move('down', e.shiftKey);
+        break;
+      case left:
+      case shiftLeft:
+        e.preventDefault();
+        arg.move('left', e.shiftKey);
+        break;
+      case right:
+      case shiftRight:
+        e.preventDefault();
+        arg.move('right', e.shiftKey);
+        break;
+      case rmWin:
+      case rmMac:
+        arg.remove();
+        break;
+      case esc:
+        arg.esc();
+        break;
+      case copyWin:
+      case copyMac:
+        arg.copy();
+        break;
+      case pasteWin:
+      case pasteMac:
+        arg.paste();
+        break;
+      case redoWin:
+      case redoMac:
+        arg.redo();
+        break;
+      case undoWin:
+      case undoMac:
+        arg.undo();
+        break;
+      case saveWin:
+      case saveMac:
+        e.preventDefault();
+        arg.save();
+        break;
+      case selectAllWin:
+      case selectAllMac:
+        e.preventDefault();
+        arg.selectAll();
+        break;
+      default:
+        break;
+    }
+  });
+};
+
+export const destroyShortCuts = () => {
+  hotkeys.unbind(keys.join());
+};
+
+/**
+ * Guess the MIME type by checking the first few bytes of the ArrayBuffer.
+ * Currently checks for PNG, JPEG, and GIF signatures.
+ */
+function detectMimeType(arrayBuffer: ArrayBuffer): string {
+  const dataView = new DataView(arrayBuffer);
+
+  // Check for PNG signature: 0x89 0x50 0x4E 0x47
+  if (
+    dataView.getUint8(0) === 0x89 &&
+    dataView.getUint8(1) === 0x50 &&
+    dataView.getUint8(2) === 0x4e &&
+    dataView.getUint8(3) === 0x47
+  ) {
+    return 'image/png';
+  }
+
+  // Check for JPEG signature: 0xFF 0xD8 0xFF
+  if (
+    dataView.getUint8(0) === 0xff &&
+    dataView.getUint8(1) === 0xd8 &&
+    dataView.getUint8(2) === 0xff
+  ) {
+    return 'image/jpeg';
+  }
+
+  return ''; // Unknown type
+}
+
+export const arrayBufferToBase64 = (arrayBuffer: ArrayBuffer): string => {
+  // Detect the MIME type
+  const mimeType = detectMimeType(arrayBuffer);
+
+  // Convert ArrayBuffer to raw Base64. Convert in chunks instead of byte by
+  // byte: per-byte string concatenation generates a huge number of
+  // intermediate strings, which can exhaust memory on mobile devices when
+  // encoding multi-megabyte page background images.
+  const bytes = new Uint8Array(arrayBuffer);
+  const chunkSize = 0x8000;
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    chunks.push(
+      String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize) as unknown as number[]),
+    );
+  }
+  const base64String = btoa(chunks.join(''));
+
+  // Optionally prepend a data: URL if a known MIME type is found;
+  // otherwise just return the raw Base64.
+  if (mimeType) {
+    return `data:${mimeType};base64,${base64String}`;
+  } else {
+    // or you can default to `application/octet-stream` if unknown
+    return `data:application/octet-stream;base64,${base64String}`;
+  }
+};
+
+const convertSchemasForUI = (template: Template): SchemaForUI[][] => {
+  template.schemas.forEach((page) => {
+    page.forEach((schema) => {
+      (schema as SchemaForUI).id = uuid();
+      (schema as SchemaForUI).content = schema.content || '';
+    });
+  });
+
+  return template.schemas as SchemaForUI[][];
+};
+
+export const template2SchemasList = async (_template: Template) => {
+  const template = cloneDeep(_template);
+  const { basePdf, schemas } = template;
+  const schemasForUI = convertSchemasForUI(template);
+
+  let pageSizes: Size[] = [];
+  if (isBlankPdf(basePdf)) {
+    pageSizes = schemas.map(() => ({
+      width: basePdf.width,
+      height: basePdf.height,
+    }));
+  } else {
+    const b64BasePdf = await getB64BasePdf(basePdf);
+    // pdf2size accepts both ArrayBuffer and Uint8Array
+    const pdfArrayBuffer = b64toUint8Array(b64BasePdf);
+
+    pageSizes = await pdf2size(pdfArrayBuffer);
+  }
+
+  return alignSchemasListToPageCount(schemasForUI, pageSizes.length).map((schema, i) => {
+    Object.values(schema).forEach((value) => {
+      const { width, height } = pageSizes[i];
+      const xEdge = value.position.x + value.width;
+      const yEdge = value.position.y + value.height;
+      if (xEdge > width) {
+        value.position.x = Math.max(0, width - value.width);
+      }
+      if (yEdge > height) {
+        value.position.y = Math.max(0, height - value.height);
+      }
+    });
+
+    return schema;
+  });
+};
+
+/**
+ * Pad or truncate schema pages so the list length matches `pageCount`.
+ * Empty pages are distinct arrays. This is the same alignment `template2SchemasList`
+ * uses when a base PDF's page count and the schema pages differ.
+ */
+export const alignSchemasListToPageCount = <T>(schemasList: T[][], pageCount: number): T[][] => {
+  if (schemasList.length === pageCount) return schemasList;
+  if (schemasList.length < pageCount) {
+    return schemasList.concat(
+      Array.from({ length: pageCount - schemasList.length }, () => [] as T[]),
+    );
+  }
+  return schemasList.slice(0, Math.max(pageCount, 0));
+};
+
+/**
+ * Fit a history snapshot to the pages of the current base PDF.
+ * Blank PDFs follow the snapshot length. A non-blank PDF keeps `pageSizes.length`,
+ * using the same pad/truncate as `template2SchemasList`. A zero page count means
+ * sizes are not loaded yet, so the snapshot is left unchanged.
+ */
+export const normalizeSchemasListForBasePdf = (
+  schemasList: SchemaForUI[][],
+  basePdf: BasePdf,
+  pageCount: number,
+): SchemaForUI[][] => {
+  if (isBlankPdf(basePdf) || pageCount <= 0) return schemasList;
+  return alignSchemasListToPageCount(schemasList, pageCount);
+};
+
+export const schemasList2template = (schemasList: SchemaForUI[][], basePdf: BasePdf): Template => ({
+  schemas: cloneDeep(schemasList).map((page) =>
+    page.map((schema) => {
+      // @ts-expect-error Property 'id' is used only in UI
+      delete schema.id;
+      return schema;
+    }),
+  ),
+  basePdf,
+});
+
+export const getUniqueSchemaName = (arg: {
+  copiedSchemaName: string;
+  schema: SchemaForUI[];
+  stackUniqueSchemaNames: string[];
+}) => {
+  const { copiedSchemaName, schema, stackUniqueSchemaNames } = arg;
+  const schemaNames = schema.map((s) => s.name).concat(stackUniqueSchemaNames);
+  const tmp: { [originalName: string]: number } = schemaNames.reduce(
+    (acc, cur) => Object.assign(acc, { originalName: cur, copiedNum: 0 }),
+    {},
+  );
+  const extractOriginalName = (name: string) => name.replace(/ copy$| copy [0-9]*$/, '');
+  schemaNames
+    .filter((name) => / copy$| copy [0-9]*$/.test(name))
+    .forEach((name) => {
+      const originalName = extractOriginalName(name);
+      const match = name.match(/[0-9]*$/);
+      const copiedNum = match && match[0] ? Number(match[0]) : 1;
+      if ((tmp[originalName] ?? 0) < copiedNum) {
+        tmp[originalName] = copiedNum;
+      }
+    });
+
+  const originalName = extractOriginalName(copiedSchemaName);
+  if (tmp[originalName]) {
+    const copiedNum = tmp[originalName];
+    const uniqueName = `${originalName} copy ${copiedNum + 1}`;
+    stackUniqueSchemaNames.push(uniqueName);
+
+    return uniqueName;
+  }
+  const uniqueName = `${copiedSchemaName} copy`;
+  stackUniqueSchemaNames.push(uniqueName);
+
+  return uniqueName;
+};
+
+export const moveCommandToChangeSchemasArg = (props: {
+  command: 'up' | 'down' | 'left' | 'right';
+  activeSchemas: SchemaForUI[];
+  isShift: boolean;
+  pageSize: Size;
+}) => {
+  const { command, activeSchemas, isShift, pageSize } = props;
+  const key = command === 'up' || command === 'down' ? 'y' : 'x';
+  const num = isShift ? 0.1 : 1;
+
+  const getValue = (as: SchemaForUI) => {
+    let value = 0;
+    const { position } = as;
+    switch (command) {
+      case 'up':
+        value = round(position.y - num, 2);
+        break;
+      case 'down':
+        value = round(position.y + num, 2);
+        break;
+      case 'left':
+        value = round(position.x - num, 2);
+        break;
+      case 'right':
+        value = round(position.x + num, 2);
+        break;
+      default:
+        break;
+    }
+
+    return value > 0 ? value : 0;
+  };
+
+  return activeSchemas.map((as) => {
+    let value = getValue(as);
+    const { width, height } = as;
+    if (key === 'x') {
+      value = value > pageSize.width - width ? round(pageSize.width - width, 2) : value;
+    } else {
+      value = value > pageSize.height - height ? round(pageSize.height - height, 2) : value;
+    }
+
+    return { key: `position.${key}`, value, schemaId: as.id };
+  });
+};
+
+export const getPagesScrollTopByIndex = (pageSizes: Size[], index: number, scale: number) => {
+  return pageSizes
+    .slice(0, index)
+    .reduce((acc, cur) => acc + (cur.height * ZOOM + RULER_HEIGHT * scale) * scale, 0);
+};
+
+export const getVisibleOverlap = (containerRect: DOMRect, elementRect: DOMRect) => {
+  const width = Math.max(
+    0,
+    Math.min(containerRect.right, elementRect.right) -
+      Math.max(containerRect.left, elementRect.left),
+  );
+  const height = Math.max(
+    0,
+    Math.min(containerRect.bottom, elementRect.bottom) -
+      Math.max(containerRect.top, elementRect.top),
+  );
+
+  return { width, height, area: width * height };
+};
+
+const VERTICAL_SCROLL_EDGE_EPSILON = 1;
+
+const isAtVerticalScrollEdge = (container: HTMLElement) => {
+  const maxScrollTop = container.scrollHeight - container.clientHeight;
+  if (maxScrollTop <= 0) return false;
+
+  const { scrollTop } = container;
+  return (
+    scrollTop <= VERTICAL_SCROLL_EDGE_EPSILON ||
+    scrollTop >= maxScrollTop - VERTICAL_SCROLL_EDGE_EPSILON
+  );
+};
+
+export const getStickyScrollPageIndex = (
+  container: HTMLElement,
+  papers: Array<HTMLElement | null | undefined>,
+  pageCursor: number,
+) => {
+  const containerRect = container.getBoundingClientRect();
+  const stickyHeight = containerRect.height * PAGE_SWITCH_REMAINING_RATIO;
+
+  let bestPageIndex = pageCursor;
+  let bestVisibleArea = 0;
+  let currentVisibleHeight = 0;
+  let currentVisibleArea = 0;
+
+  papers.forEach((paper, pageIndex) => {
+    if (!paper) return;
+
+    const { height, area } = getVisibleOverlap(containerRect, paper.getBoundingClientRect());
+    if (pageIndex === pageCursor) {
+      currentVisibleHeight = height;
+      currentVisibleArea = area;
+    }
+    if (area > bestVisibleArea) {
+      bestVisibleArea = area;
+      bestPageIndex = pageIndex;
+    }
+  });
+
+  if (bestVisibleArea <= 0) return pageCursor;
+
+  const keepCurrentPage =
+    !isAtVerticalScrollEdge(container) &&
+    currentVisibleArea > 0 &&
+    currentVisibleHeight >= stickyHeight;
+
+  return keepCurrentPage ? pageCursor : bestPageIndex;
+};
+
+export type ZoomMode = 'manual' | 'fit-width' | 'fit-height';
+
+export type ZoomAnchor = {
+  pageIndex: number;
+  localX: number;
+  localY: number;
+  clientX: number;
+  clientY: number;
+};
+
+export const MIN_ZOOM = 0.25;
+
+const FIT_GUTTER = PAGE_GAP * 4;
+
+export const clampZoomLevel = (zoomLevel: number, maxZoom: number, minZoom: number = MIN_ZOOM) =>
+  Math.min(Math.max(zoomLevel, minZoom), maxZoom);
+
+export const getFitZoomLevel = ({
+  mode,
+  pageSize,
+  container,
+  baseScale,
+  maxZoom,
+  hasRulers = false,
+}: {
+  mode: Exclude<ZoomMode, 'manual'>;
+  pageSize: Size | undefined;
+  container: HTMLElement | null;
+  baseScale: number;
+  maxZoom: number;
+  hasRulers?: boolean;
+}) => {
+  if (baseScale <= 0) return 1;
+  if (mode === 'fit-height') return clampZoomLevel(1, maxZoom);
+  if (!pageSize || !container) return 1;
+
+  const rulerSize = hasRulers ? RULER_HEIGHT : 0;
+  const availableWidth = Math.max(1, container.clientWidth - rulerSize - FIT_GUTTER);
+  const paperWidth = pageSize.width * ZOOM;
+  const fitScale = availableWidth / paperWidth;
+
+  return clampZoomLevel(fitScale / baseScale, maxZoom);
+};
+
+export const getZoomAnchor = ({
+  pageIndex,
+  paper,
+  clientX,
+  clientY,
+  scale,
+}: {
+  pageIndex: number;
+  paper: HTMLElement | undefined;
+  clientX: number;
+  clientY: number;
+  scale: number;
+}): ZoomAnchor | null => {
+  if (!paper || scale <= 0) return null;
+
+  const rect = paper.getBoundingClientRect();
+  return {
+    pageIndex,
+    localX: (clientX - rect.left) / scale,
+    localY: (clientY - rect.top) / scale,
+    clientX,
+    clientY,
+  };
+};
+
+export const restoreZoomAnchor = ({
+  container,
+  paper,
+  anchor,
+  scale,
+}: {
+  container: HTMLElement | null;
+  paper: HTMLElement | undefined;
+  anchor: ZoomAnchor | null;
+  scale: number;
+}) => {
+  if (!container || !paper || !anchor || scale <= 0) return;
+
+  const rect = paper.getBoundingClientRect();
+  const nextClientX = rect.left + anchor.localX * scale;
+  const nextClientY = rect.top + anchor.localY * scale;
+
+  if (Number.isFinite(nextClientX)) {
+    container.scrollLeft += nextClientX - anchor.clientX;
+  }
+  if (Number.isFinite(nextClientY)) {
+    container.scrollTop += nextClientY - anchor.clientY;
+  }
+};
+
+const handlePositionSizeChange = (
+  schema: SchemaForUI,
+  key: string,
+  value: unknown,
+  basePdf: BasePdf,
+  pageSize: Size,
+) => {
+  const padding = isBlankPdf(basePdf) ? basePdf.padding : [0, 0, 0, 0];
+  const [pt, pr, pb, pl] = padding;
+  const { width: pw, height: ph } = pageSize;
+  const calcBounds = (v: unknown, min: number, max: number) =>
+    Math.min(Math.max(Number(v), min), max);
+  if (key === 'position.x') {
+    schema.position.x = calcBounds(value, pl, pw - schema.width - pr);
+  } else if (key === 'position.y') {
+    schema.position.y = calcBounds(value, pt, ph - schema.height - pb);
+  } else if (key === 'width') {
+    schema.width = calcBounds(value, 0, pw - schema.position.x - pr);
+  } else if (key === 'height') {
+    schema.height = calcBounds(value, 0, ph - schema.position.y - pb);
+  }
+};
+
+const handleTypeChange = (
+  schema: SchemaForUI,
+  key: string,
+  value: unknown,
+  pluginsRegistry: PluginRegistry,
+) => {
+  if (key !== 'type') return;
+  const keysToKeep = ['id', 'name', 'type', 'position', 'required'];
+  Object.keys(schema).forEach((key) => {
+    if (!keysToKeep.includes(key)) {
+      delete schema[key as keyof typeof schema];
+    }
+  });
+
+  const plugin = pluginsRegistry.findByType(value as string);
+
+  // Apply default schema properties if available
+  if (plugin?.propPanel.defaultSchema) {
+    const defaultSchema = plugin.propPanel.defaultSchema;
+    const schemaRecord = schema as Record<string, unknown>;
+
+    // Use a type-safe approach to copy properties
+    for (const key of Object.keys(defaultSchema)) {
+      // Only add properties that don't already exist in the schema
+      if (!Object.prototype.hasOwnProperty.call(schema, key)) {
+        const propertyValue = defaultSchema[key];
+        if (propertyValue !== undefined) {
+          schemaRecord[key] = propertyValue;
+        }
+      }
+    }
+  }
+  if (schema.readOnly) {
+    schema.required = false;
+  }
+};
+
+const ASPECT_RATIO_TRIGGER_KEYS = new Set(['width', 'height', 'content', 'type']);
+
+/**
+ * Snap the box to the plugin's intrinsic ratio. A height-only edit derives the width;
+ * every other trigger (width, both sides from a canvas resize, content, type) derives
+ * the height. If the page bounds clamp the derived side, the edited side shrinks to match.
+ */
+const applyAspectRatio = (
+  schema: SchemaForUI,
+  changedKeys: Set<string>,
+  pluginsRegistry: PluginRegistry,
+  basePdf: BasePdf,
+  pageSize: Size,
+) => {
+  if (![...changedKeys].some((key) => ASPECT_RATIO_TRIGGER_KEYS.has(key))) return;
+  const ratio = pluginsRegistry.findByType(schema.type)?.getAspectRatio?.(schema);
+  if (!ratio || !Number.isFinite(ratio) || ratio <= 0) return;
+
+  const fromHeight = changedKeys.has('height') && !changedKeys.has('width');
+  const [edited, derived] = fromHeight
+    ? (['height', 'width'] as const)
+    : (['width', 'height'] as const);
+  const deriveFrom = (key: 'width' | 'height') =>
+    round(key === 'width' ? schema.width / ratio : schema.height * ratio, 2);
+
+  const target = deriveFrom(edited);
+  handlePositionSizeChange(schema, derived, target, basePdf, pageSize);
+  // Re-derive the edited side only when bounds clamped the derived one; otherwise
+  // rounding would alter the value the user just typed.
+  if (schema[derived] !== target) {
+    handlePositionSizeChange(schema, edited, deriveFrom(derived), basePdf, pageSize);
+  }
+};
+
+export const changeSchemas = (args: {
+  objs: { key: string; value: unknown; schemaId: string }[];
+  schemas: SchemaForUI[];
+  basePdf: BasePdf;
+  pluginsRegistry: PluginRegistry;
+  pageSize: { width: number; height: number };
+  commitSchemas: (newSchemas: SchemaForUI[]) => void;
+}) => {
+  const { objs, schemas, basePdf, pluginsRegistry, pageSize, commitSchemas } = args;
+  const changedKeysById = new Map<string, Set<string>>();
+  const newSchemas = objs.reduce((acc, { key, value, schemaId }) => {
+    const tgt = acc.find((s) => s.id === schemaId);
+    if (!tgt) return acc;
+    // Assign to reference
+    set(tgt, key, value);
+
+    if (key === 'type') {
+      handleTypeChange(tgt, key, value, pluginsRegistry);
+    } else if (['position.x', 'position.y', 'width', 'height'].includes(key)) {
+      handlePositionSizeChange(tgt, key, value, basePdf, pageSize);
+    }
+
+    const changedKeys = changedKeysById.get(schemaId) ?? new Set<string>();
+    changedKeys.add(key);
+    changedKeysById.set(schemaId, changedKeys);
+
+    return acc;
+  }, cloneDeep(schemas));
+
+  for (const schema of newSchemas) {
+    const changedKeys = changedKeysById.get(schema.id);
+    if (changedKeys) applyAspectRatio(schema, changedKeys, pluginsRegistry, basePdf, pageSize);
+  }
+  commitSchemas(newSchemas);
+};
+
+export const getDynamicHeightReflowChanges = (args: {
+  schemas: SchemaForUI[];
+  schema: SchemaForUI;
+  height: unknown;
+}): { key: string; value: unknown; schemaId: string }[] => {
+  const { schemas, schema, height } = args;
+  if (schema.type !== 'list') return [];
+
+  const nextHeight = Number(height);
+  if (!Number.isFinite(nextHeight)) return [];
+
+  const delta = nextHeight - schema.height;
+  if (delta === 0) return [];
+
+  const baseBottom = schema.position.y + schema.height;
+  return schemas
+    .filter((s) => s.id !== schema.id && s.position.y >= baseBottom)
+    .map((s) => ({
+      key: 'position.y',
+      value: round(s.position.y + delta, 2),
+      schemaId: s.id,
+    }));
+};
+
+export const useMaxZoom = () => {
+  const options = useContext(OptionsContext);
+
+  return options.maxZoom ? options.maxZoom / 100 : DEFAULT_MAX_ZOOM;
+};
+
+export const setFontNameRecursively = (
+  obj: Record<string, unknown>,
+  fontName: string,
+  seen = new WeakSet(),
+): void => {
+  if (!obj || typeof obj !== 'object' || seen.has(obj)) return;
+  seen.add(obj);
+
+  for (const key in obj) {
+    if (
+      key === 'fontName' &&
+      Object.prototype.hasOwnProperty.call(obj, key) &&
+      obj[key] === undefined
+    ) {
+      obj[key] = fontName;
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      setFontNameRecursively(obj[key] as Record<string, unknown>, fontName, seen);
+    }
+  }
+};

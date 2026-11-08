@@ -1,0 +1,116 @@
+# .github/workflows/publish.yml
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            playground/package-lock.json
+
+      - name: Determine version and tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Release build
+            VERSION=${GITHUB_REF#refs/tags/}
+            if [[ $VERSION == *"-alpha"* ]] || [[ $VERSION == *"-beta"* ]] || [[ $VERSION == *"-rc"* ]]; then
+              NPM_TAG="next"
+            else
+              NPM_TAG="latest"
+            fi
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+            echo "NPM_TAG=$NPM_TAG" >> $GITHUB_ENV
+          else
+            # Dev build (main branch push)
+            # increment-version.sh sets VERSION in GITHUB_ENV
+            ./scripts/increment-version.sh
+            echo "NPM_TAG=dev" >> $GITHUB_ENV
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Set NPM version
+        run: npm version --no-git-tag-version $VERSION --workspaces
+
+      - name: Build
+        run: npm run build
+
+      - name: Consumer types
+        run: npm run test:types:consumer
+
+      - name: Test
+        run: npm run test
+        env:
+          CI: true
+
+      - name: Publish to NPM
+        run: npm publish --workspaces --access public --tag $NPM_TAG
+
+  playground-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            playground/package-lock.json
+
+      - name: Install dependencies and build project
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install playground dependencies
+        run: |
+          npm ci --prefix playground
+
+      - name: Configure Puppeteer Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME_PATH" ]; then
+            echo "No system Chrome executable found" >&2
+            exit 1
+          fi
+          test -x "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+          echo "$CHROME_PATH"
+
+      - name: Run playground checks
+        run: |
+          npm --prefix playground run lint
+          npm --prefix playground run build
+          npm --prefix playground run test
+        env:
+          CI: true
